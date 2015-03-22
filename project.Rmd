@@ -1,0 +1,71 @@
+---
+title: "Practical Machine Learning Project"
+author: "Colin Wright"
+date: "Saturday, March 21, 2015"
+output: html_document
+---
+## Introduction 
+
+This is the course project for Practical Machine Learning, an online Coursera course in the data science specialization sequence taught by Jeff Leek of Johns Hopkins. The object is to predict how well participants perform specific exercises. Data is collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways (sitting, sitting down, standing, sanding up and walking).
+
+
+The raw training data contains 19,622 observations of 160 variables. A prediction model is then formulated to predict twenty activities using the testing data, which contains 20 observations of 160 variables. The data and more information can be found at http://groupware.les.inf.puc-rio.br/har
+
+## Data tidying
+
+First the data is downloaded and read with simple read.csv commands:
+
+```{r}
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+```
+Then the NA columns are identified from the first line of the testing data, then removed from both testing and training sets. The first seven character colums are also stripped out of the two data frames.
+
+
+```{r}
+na_cols <- is.na( testing[1,])
+
+testing2 <- testing[,!na_cols]
+testing2 <- testing2[, -c(1:7)
+                     ]
+training2 <- training[, !na_cols]
+training2 <- training2[, -c(1:7)]
+```
+
+Now we are left with 53 columns each.
+
+## Random Forest model 
+As suggested in the course forum, we start with a Random Forest model from the randomForest package and select for the 'classe' variable against all predictors. This combines speeed with good accuracy for this large data set. We chose 100 trees and include the <importance> parameter which allows us to rank the predictors in a few seconds on my 6 GB laptop.
+
+```{r cache=TRUE}
+library(randomForest)
+set.seed(123)
+modFit <- randomForest( factor(classe)~., data=training2, ntree=100, importance=T)
+modFit
+```
+Out of sample error is estimated at only 0.32%.
+
+## Cross Validation Model 
+
+Since the assignment asked for cross-validation, I decided to use the "train" function from the "caret" package. However, since this takes so long to run, I pared down the predictors to 20. For this I used the "varImpPlot"" function on the modFit model (which is why the variable "importance" parameter was set to TRUE). 
+
+```{r cache=TRUE}
+varImpPlot( modFit)
+```
+
+We chose just 4 folds of cross validation ("cv") for speed, using the "trainControl" parameter, and feed this into the "train" function with the "rf" (random forest) method:
+
+```{r cache=T}
+library( caret)
+fitControl<-trainControl( method="cv", number=4 )
+
+modFit2 <- train(factor(classe) ~ pitch_belt+yaw_belt+roll_belt+magnet_dumbbell_z+pitch_forearm+magnet_forearm_z+magnet_dumbbell_y+accel_dumbbell_z+gyros_forearm_y+roll_arm+gyros_forearm_z+accel_dumbbell_y+accel_dumbbell_x+accel_dumbbell_z+magnet_arm_z+gyros_arm_x+gyros_arm_z+accel_arm_z+roll_forearm+magnet_belt_y, method = "rf", data = training2, trControl=fitControl, tuneLength=1        ) 
+modFit2
+```
+This takes several minutes longer, but is more accurate (99.4%).
+
+## Predictions
+Both models predict the same correct sequence for the "classe" variable.
+```{r}
+predict( modFit2, testing2)
+```
